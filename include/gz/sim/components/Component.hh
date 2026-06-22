@@ -378,6 +378,15 @@ namespace components
     /// \todo(nkoenig) Deprecate this function in version 3.
     public: DataType &Data();
 
+    /// \brief Set the data of this component by moving it.
+    /// \param[in] _data New data for this component.
+    /// \param[in] _eql Equality comparison function. This function should
+    /// return true if two instances of DataType are equal.
+    /// \return True if the _eql function returns false.
+    public: bool SetDataMove(DataType &&_data,
+                const std::function<
+                  bool(const DataType &, const DataType &)> &_eql);
+
     /// \brief Set the data of this component.
     /// \param[in] _data New data for this component.
     /// \param[in] _eql Equality comparison function. This function should
@@ -498,6 +507,18 @@ namespace components
   {
     bool result = !_eql(_data, this->data);
     this->data = _data;
+    return result;
+  }
+
+  //////////////////////////////////////////////////
+  template <typename DataType, typename Identifier, typename Serializer>
+  bool Component<DataType, Identifier, Serializer>::SetDataMove(
+      DataType &&_data,
+      const std::function<bool(const DataType &, const DataType &)> &_eql)
+  {
+    bool result = !_eql(_data, this->data);
+    using std::swap;
+    swap(this->data, _data);
     return result;
   }
 

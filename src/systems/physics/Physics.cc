@@ -411,6 +411,9 @@ class gz::sim::systems::PhysicsPrivate
   /// should be deleted the following iteration.
   public: std::unordered_set<Entity> collisionEnabledCmdsToRemove;
 
+/// \brief Shared contacts message.
+  public: msgs::Contacts contactsComp;
+
   /// \brief IDs of the ContactSurfaceHandler callbacks registered for worlds
   public: std::unordered_map<Entity, std::string> worldContactCallbackIDs;
 
@@ -4613,11 +4616,10 @@ void PhysicsPrivate::UpdateCollisions(EntityComponentManager &_ecm)
       [&](const Entity &_collEntity1, components::Collision *,
           components::ContactSensorData *_contacts) -> bool
       {
-        msgs::Contacts contactsComp;
         if (entityContactMap.find(_collEntity1) == entityContactMap.end())
         {
           // Clear the last contact data
-          auto state = _contacts->SetData(contactsComp,
+          auto state = _contacts->SetDataMove(std::move(this->contactsComp),
             this->contactsEql) ?
             ComponentState::PeriodicChange :
             ComponentState::NoChange;
@@ -4676,12 +4678,14 @@ void PhysicsPrivate::UpdateCollisions(EntityComponentManager &_ecm)
           }
         }
 
-        auto state = _contacts->SetData(contactsComp,
+        auto state = _contacts->SetDataMove(std::move(this->contactsComp),
           this->contactsEql) ?
           ComponentState::PeriodicChange :
           ComponentState::NoChange;
         _ecm.SetChanged(
           _collEntity1, components::ContactSensorData::typeId, state);
+
+        this->contactsComp.Clear();
 
         return true;
       });
