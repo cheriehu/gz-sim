@@ -182,9 +182,6 @@ class gz::sim::EntityComponentManagerPrivate
           bool ClonedJointLinkName(Entity _joint, Entity _originalLink,
               EntityComponentManager *_ecm);
 
-  /// \brief Keep track of entities already used to ensure uniqueness.
-  public: uint64_t entityCount{0};
-
   /// \brief During cloning, we populate two maps:
   ///  - map of cloned model entities to the non-cloned model's canonical link
   ///  - map of non-cloned canonical links to the cloned canonical link
@@ -273,6 +270,8 @@ void EntityComponentManager::EnqueueGroup(
 EntityComponentManager::EntityComponentManager()
   : dataPtr(new EntityComponentManagerPrivate)
 {
+  // 0 is reserved for kNullEntity
+  this->Registry().storage<Entity>().start_from(1);
   this->Registry().storage<NewEntity>();
   this->Registry().storage<RemoveEntity>();
   this->Registry().storage<ModifiedComponent>();
@@ -297,6 +296,7 @@ void EntityComponentManagerPrivate::CopyFrom(
     const EntityComponentManagerPrivate &_from)
 {
   this->registry.clear();
+  this->registry.storage<Entity>().start_from(1);
 
   const auto entityView = _from.registry.view<const Entity>();
   // Create all entities first so the Children update component hook doesn't
@@ -310,7 +310,6 @@ void EntityComponentManagerPrivate::CopyFrom(
   {
     this->CopyComponents(e, _from.registry);
   }
-  this->entityCount = _from.entityCount;
   // Not copying maps related to cloning since they are transient variables
   // that are used as return values of some member functions.
 }
@@ -324,15 +323,16 @@ size_t EntityComponentManager::EntityCount() const
 /////////////////////////////////////////////////
 Entity EntityComponentManager::CreateEntity()
 {
-  this->dataPtr->entityCount++;
-  return this->dataPtr->CreateEntityImplementation(this->dataPtr->entityCount);
+  return this->dataPtr->CreateEntityImplementation(kNullEntity);
 }
 
 /////////////////////////////////////////////////
 Entity EntityComponentManagerPrivate::CreateEntityImplementation(Entity _entity)
 {
   GZ_PROFILE("EntityComponentManager::CreateEntityImplementation");
-  const auto e = this->registry.create(_entity);
+  const auto e = (_entity == kNullEntity)
+      ? this->registry.create()
+      : this->registry.create(_entity);
   this->registry.emplace<NewEntity>(e);
   return e;
 }
@@ -1692,14 +1692,20 @@ std::unordered_set<ComponentTypeId> EntityComponentManager::ComponentTypes(
 /////////////////////////////////////////////////
 void EntityComponentManager::SetEntityCreateOffset(uint64_t _offset)
 {
-  if (_offset < this->dataPtr->entityCount)
+  uint64_t maxEntity{0};
+  for (const auto e : this->Registry().storage<Entity>())
+  {
+    maxEntity = std::max<uint64_t>(maxEntity, entt::to_entity(e));
+  }
+
+  if (_offset < maxEntity)
   {
     gzwarn << "Setting an entity offset of [" << _offset << "] is less than "
-     << "the current entity count of [" << this->dataPtr->entityCount << "]. "
+     << "the current entity count of [" << maxEntity << "]. "
      << "Incorrect behavior should be expected.\n";
   }
 
-  this->dataPtr->entityCount = _offset;
+  this->Registry().storage<Entity>().start_from(_offset + 1);
 }
 
 /////////////////////////////////////////////////
@@ -1878,10 +1884,6 @@ void EntityComponentManager::ApplyEntityDiff(
       if (!this->HasEntity(entity))
       {
         std::ignore = this->Registry().create(entity);
-        if (entity >= this->dataPtr->entityCount)
-        {
-          this->dataPtr->entityCount = entity;
-        }
         addedEntities.push_back(entity);
       }
     }

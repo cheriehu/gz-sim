@@ -972,9 +972,10 @@ TEST_P(EntityComponentManagerFixture, RemoveEntity)
   EXPECT_EQ(2u, manager.EntityCount());
   EXPECT_FALSE(manager.HasEntity(e2));
 
-  // Creating an new entity shouldn't reuse the previously deleted entity.
+  // Creating a new entity should reuse the previously deleted entity.
   auto e4 = manager.CreateEntity();
-  EXPECT_EQ(4u, e4);
+  EXPECT_EQ(2u, entt::to_entity(e4));
+  EXPECT_EQ(1u, entt::to_version(e4));
   EXPECT_EQ(3u, manager.EntityCount());
 
   // Can not delete an invalid entity and it does not show as marked for removal
@@ -999,7 +1000,7 @@ TEST_P(EntityComponentManagerFixture, RemoveEntity)
   EXPECT_EQ(1u, manager.EntityCount());
 
   // Delete last
-  manager.RequestRemoveEntity(4);
+  manager.RequestRemoveEntity(e4);
   EXPECT_EQ(1u, manager.EntityCount());
   EXPECT_TRUE(manager.HasEntitiesMarkedForRemoval());
   manager.ProcessEntityRemovals();
